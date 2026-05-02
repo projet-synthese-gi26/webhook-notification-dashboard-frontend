@@ -1,31 +1,50 @@
-# ========================================
-# ÉTAPE 1 : BUILD (Compilation Vite/React)
-# ========================================
-FROM node:20-alpine AS build
+# =============================================================
+# DOCKERFILE — FRONTEND VITE / REACT
+# Pas de Nginx. Le container sert l'app via "vite preview"
+# (équivalent prod de "npm run dev", sert le /dist buildé).
+# La terminaison HTTP / reverse proxy est gérée par le
+# docker-compose infra du serveur.
+# =============================================================
+
+# -----------------------------------------------------------
+# STAGE 1 — builder
+# -----------------------------------------------------------
+FROM node:20-alpine AS builder
+
 WORKDIR /app
 
-# Copier les fichiers de dépendances
-COPY package.json package-lock.json ./
+COPY package*.json ./
+RUN npm ci --prefer-offline
 
-# Installer les dépendances
-RUN npm ci
-
-# Copier le code source
 COPY . .
 
-# Compiler l'application
+# --- VITE_* injectées via --build-arg au moment du build ---
+ARG VITE_API_URL
+
+RUN printf "VITE_API_URL=%s\n"\
+  "$VITE_API_URL" \
+  > .env
+
 RUN npm run build
 
-# ========================================
-# ÉTAPE 2 : SERVEUR WEB (Nginx)
-# ========================================
-FROM nginx:alpine
+# -----------------------------------------------------------
+# STAGE 2 — runner
+# Node Alpine léger. On garde node_modules uniquement pour
+# vite preview (vite doit être dans les devDependencies).
+# -----------------------------------------------------------
+FROM node:20-alpine AS runner
 
-# Copier les fichiers compilés
-COPY --from=build /app/dist /usr/share/nginx/html
+WORKDIR /app
 
-# Exposer le port HTTP par défaut
-EXPOSE 80
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/vite.config.js ./vite.config.js
 
-# Lancer Nginx
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 3000
+
+#HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+#  CMD wget -qO- http://localhost:3000/ || exit 1
+
+# vite preview sert le /dist buildé sur le port 4173
+CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "3000"]
