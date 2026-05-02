@@ -1,4 +1,4 @@
-name: Fare Calculator CI/CD
+name: React js + vite CI/CD
 
 on:
   push:
