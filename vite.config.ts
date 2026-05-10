@@ -9,6 +9,15 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       host: "0.0.0.0",
+      strictPort: true,
+      allowedHosts: [
+        'webhook-dev.yowyob.com'
+      ]
+    },
+    preview: {
+      allowedHosts: [
+        'webhook-dev.yowyob.com'
+      ]
     },
     plugins: [react()],
     define: {
